@@ -157,17 +157,20 @@ AmdWaveMatrixAccumulator<fc, M, N> AmdWaveMatrixMultiply(AmdWaveMatrixA<fa, M, K
 
 // Shared memory (uint arrays): offset and stride in uints
 #define AMD_GROUPSHARED_LOAD(mo, gs, offEl, strideEl, colMajor) \
+    GroupMemoryBarrierWithGroupSync(); \
     [unroll] for (uint _i = 0; _i < 8; ++_i) { \
         const uint _a = emu::byteAddr((offEl) * 4, (strideEl) * 4, (colMajor), emu::rowOf(_i), emu::colOf(), emu::esizeOf(mo.Fmt())); \
         mo.v[_i] = emu::readElem((gs)[_a >> 2], _a & 3, mo.Fmt()); \
     }
 #define AMD_GROUPSHARED_STORE(mo, gs, offEl, strideEl, colMajor) \
+    GroupMemoryBarrierWithGroupSync(); \
     [unroll] for (uint _i = 0; _i < 8; ++_i) { \
         const uint _a = emu::byteAddr((offEl) * 4, (strideEl) * 4, (colMajor), emu::rowOf(_i), emu::colOf(), emu::esizeOf(mo.Fmt())); \
         const uint _es = emu::esizeOf(mo.Fmt()); \
         if (_es == 4) (gs)[_a >> 2] = asuint(mo.v[_i]); \
         else { const uint _sh = 8 * (_a & 3), _mk = (_es == 1 ? 0xffu : 0xffffu) << _sh; uint _o; \
                InterlockedAnd((gs)[_a >> 2], ~_mk, _o); InterlockedOr((gs)[_a >> 2], (emu::bitsOf(mo.v[_i], mo.Fmt()) << _sh) & _mk, _o); } \
-    }
+    } \
+    GroupMemoryBarrierWithGroupSync();
 
 #endif

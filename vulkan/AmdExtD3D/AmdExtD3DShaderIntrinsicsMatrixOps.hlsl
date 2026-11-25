@@ -248,10 +248,15 @@ AmdWaveMatrixAccumulator<matrixDataFmtAccumulator, DIMM, DIMN> AmdWaveMatrixMult
     return r;
 }
 
-// Shared memory: offset and stride in elements of the groupshared uint array
+// Shared memory: offset and stride in elements of the groupshared uint array. AMD's code writes shared memory with
+// plain stores right before a matrix load from it, and reads a matrix store back right after, with no barrier: on
+// AMD's driver one group is one wave in lockstep. Vulkan's memory model needs a barrier for that, so both macros
+// have them, before and after (the group is one wave and the code is in uniform control flow, so it costs little).
 #define AMD_GROUPSHARED_LOAD(matrix_object, gsArray, offsetInArrayElements, strideInElements, bColMajor) \
-    (matrix_object).LoadShared(vk::GetGroupSharedAddress((gsArray)[(offsetInArrayElements)]), (strideInElements), (bColMajor))
+    do { GroupMemoryBarrierWithGroupSync(); \
+         (matrix_object).LoadShared(vk::GetGroupSharedAddress((gsArray)[(offsetInArrayElements)]), (strideInElements), (bColMajor)); } while (0)
 #define AMD_GROUPSHARED_STORE(matrix_object, gsArray, offsetInArrayElements, strideInElements, bColMajor) \
-    (matrix_object).StoreShared(vk::GetGroupSharedAddress((gsArray)[(offsetInArrayElements)]), (strideInElements), (bColMajor))
+    do { GroupMemoryBarrierWithGroupSync(); (matrix_object).StoreShared(vk::GetGroupSharedAddress((gsArray)[(offsetInArrayElements)]), (strideInElements), (bColMajor)); \
+         GroupMemoryBarrierWithGroupSync(); } while (0)
 
 #endif // VEYAMUX_WMMA_HLSL
