@@ -1,0 +1,38 @@
+name: build
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Tools
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends spirv-tools python3
+          # DXC, a fixed release, checked (the same one VeyAmux builds with)
+          DXC_TAG=v1.9.2609
+          DXC_SHA=96faadc7f5c282d2ffda49804beb4c3ee38127bc252b723234e3c5cdf7aa39a1
+          mkdir -p .tools/dxc
+          gh release download "$DXC_TAG" -R microsoft/DirectXShaderCompiler -p 'linux_dxc*' -O .tools/dxc.tgz
+          echo "$DXC_SHA  .tools/dxc.tgz" | sha256sum -c -
+          tar xzf .tools/dxc.tgz -C .tools/dxc && chmod +x .tools/dxc/bin/dxc
+      - name: Build
+        run: DXC="$PWD/.tools/dxc/bin/dxc" ./build.sh "${GITHUB_REF_NAME#v}"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: veyamux-fsr4
+          path: dist/*
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          name: VeyAmux FSR 4 add-on ${{ github.ref_name }}
+          body_path: NOTICE.md
+          files: dist/*
