@@ -15,7 +15,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          sudo apt-get update && sudo apt-get install -y --no-install-recommends spirv-tools python3
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends python3 cmake ninja-build
+          # spirv-val that knows SPV_EXT_float8 and SPV_EXT_cooperative_matrix_maintenance1 (pinned commits)
+          git clone -q https://github.com/KhronosGroup/SPIRV-Tools.git .tools/spvt
+          git -C .tools/spvt checkout -q 340b4c41f92610d914abbf3754ba2354856a580f
+          git clone -q https://github.com/KhronosGroup/SPIRV-Headers.git .tools/spvt/external/spirv-headers
+          git -C .tools/spvt/external/spirv-headers checkout -q fb1379425b16e58dcbdda7be0f8604a7f5cdce78
+          cmake -S .tools/spvt -B .tools/spvt/b -G Ninja -DCMAKE_BUILD_TYPE=Release -DSPIRV_SKIP_TESTS=ON -DSPIRV_WERROR=OFF > /dev/null
+          ninja -C .tools/spvt/b spirv-val > /dev/null
           # DXC, a fixed release, checked (the same one VeyAmux builds with)
           DXC_TAG=v1.9.2609
           DXC_SHA=96faadc7f5c282d2ffda49804beb4c3ee38127bc252b723234e3c5cdf7aa39a1
@@ -24,7 +31,7 @@ jobs:
           echo "$DXC_SHA  .tools/dxc.tgz" | sha256sum -c -
           tar xzf .tools/dxc.tgz -C .tools/dxc && chmod +x .tools/dxc/bin/dxc
       - name: Build
-        run: DXC="$PWD/.tools/dxc/bin/dxc" ./build.sh "${GITHUB_REF_NAME#v}"
+        run: DXC="$PWD/.tools/dxc/bin/dxc" SPIRV_VAL="$PWD/.tools/spvt/b/tools/spirv-val" ./build.sh "${GITHUB_REF_NAME#v}"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: veyamux-fsr4
